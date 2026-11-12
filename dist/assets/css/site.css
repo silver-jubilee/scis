@@ -48,6 +48,23 @@ main, footer, .nav { position: relative; z-index: 2; }
 .btn:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 10px 40px -10px rgba(95, 227, 240, .5); }
 .btn:hover::after { opacity: 1; }
 .btn:active { transform: scale(.96); transition-duration: .1s; }
+
+/* Touch polish. A touch device does two things a mouse never does: it paints a
+   translucent highlight box over whatever is tapped, and a tap on a control can
+   begin selecting that control's label — so pressing a button looked like an
+   attempt to copy its text. Both are scoped to controls only, deliberately: body
+   copy, names, addresses and the mailto links stay selectable so they can still
+   be copied. */
+.btn, .cta, .menu-btn, .spk-chip, .brand, .nav .links a, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none; user-select: none;
+}
+/* .btn already has a press state above; the controls that are not .btn need one
+   too, or removing the highlight leaves a tap with no feedback at all.
+   .session animates `transform` for its tilt, so it gets brightness instead of a
+   scale, which would otherwise overwrite that transform. */
+.menu-btn:active { transform: scale(.92); transition-duration: .1s; }
+.session:active { filter: brightness(1.07); }
 .btn.primary { background: linear-gradient(135deg, #5fe3f0, #3aa6d8 55%, #7d8cff); color: #02141a; font-weight: 600; box-shadow: 0 8px 36px -10px rgba(95, 227, 240, .7); }
 .btn.primary::before { opacity: 0; }
 .btn.primary::after { background: radial-gradient(160px circle at var(--mx) var(--my), rgba(255, 255, 255, .55), transparent 60%); }
@@ -358,7 +375,12 @@ html { scroll-behavior: auto; }
 .nav { transition: opacity .9s ease, transform .9s var(--ease), background .4s, border-color .4s, backdrop-filter .4s; }
 html:not(.no-intro):not(.intro-done) .nav { opacity: 0; transform: translateY(-20px); pointer-events: none; }
 @media (max-width: 900px) {
-  .hero { background: linear-gradient(180deg, rgba(2,8,13,.45), rgba(2,8,13,.72) 55%, rgba(2,8,13,.5)); }
+  /* Readability scrims over the full-screen stage. These are per-section, so
+     wherever two of them meet their end and start alphas have to match exactly
+     or the join shows as a hard horizontal line across the page — .hero used to
+     fade out at .5 against .about's .55, which drew a visible edge just below
+     the countdown. Keep these endpoints in step when editing. */
+  .hero { background: linear-gradient(180deg, rgba(2,8,13,.45), rgba(2,8,13,.72) 55%, rgba(2,8,13,.55)); }
   .about { background: linear-gradient(rgba(2,8,13,.55), rgba(2,8,13,.7)); }
 }
 
@@ -453,3 +475,11 @@ h1, h2, .hero .lede, .hero .sub { text-shadow: 0 2px 28px rgba(2, 8, 13, .65); }
 }
 
 .glance { background: linear-gradient(rgba(2,8,13,0), rgba(2,8,13,.7) 140px, rgba(2,8,13,.7) calc(100% - 140px), rgba(2,8,13,0)); }
+/* On mobile .about carries a scrim ending at .7, and .glance fading up from
+   transparent against it left a second, larger step than the one below the
+   countdown. Start it already matched to .about and fade out only at its foot.
+   This has to sit after the rule above, not in the earlier mobile block, or
+   that later rule simply wins. */
+@media (max-width: 900px) {
+  .glance { background: linear-gradient(rgba(2,8,13,.7), rgba(2,8,13,.7) calc(100% - 140px), rgba(2,8,13,0)); }
+}
