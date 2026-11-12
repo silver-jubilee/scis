@@ -8,7 +8,29 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 export { THREE };
 export const TAU = Math.PI * 2;
 export const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-export const LOW = innerWidth < 760 || (navigator.hardwareConcurrency || 8) <= 4;
+const CORES = navigator.hardwareConcurrency || 8;
+const WEAK = CORES <= 4 || innerWidth < 760;
+
+/* Detail tier for every scene except the cell. The cell was the only thing
+   that ever misbehaved on weak hardware; DNA, protein, network, galaxy, the
+   session visuals and the specimens were always fine, and were only ever
+   reduced because they shared a flag with it. They now render at full detail
+   everywhere.
+
+   Left as a named constant rather than deleted from the ~30 call sites, so
+   there is a single place to dial back if a weak device turns out to struggle.
+   stage.js also drops the pixel ratio by itself when frame times get bad, so
+   a device that cannot cope still has a way out - see the adaptive block
+   there, which this now leaves enabled on every device. */
+export const LOW = false;
+
+/* The cell is reduced on phones and weak machines: coarser membrane and
+   nucleus, fewer ribosomes. */
+export const CELL_LOW = WEAK;
+
+/* Separately from speed: the membrane speckle flickered on a phone that was
+   holding 61fps, so it is excluded by device rather than by performance. */
+export const FRAGILE_FX = WEAK;
 export const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const sstep = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
@@ -25,7 +47,12 @@ export function updatePointScale(renderer, camera) {
 
 export function makeRenderer(canvas, { alpha = false, antialias = true } = {}) {
   const r = new THREE.WebGLRenderer({ canvas, antialias, alpha, powerPreference: 'high-performance' });
-  r.setPixelRatio(Math.min(devicePixelRatio || 1, LOW ? 1.25 : 1.75));
+  // Resolution is the dominant fragment cost: 1.75 against 1.25 is roughly
+  // double the pixels per frame, and measuring on a Moto G34 at native 1.75
+  // gave 31fps. Cap it on weak devices and phones, which recovers the frame
+  // rate while leaving geometry and particle counts at full detail - those are
+  // comparatively cheap, and they are most of what reads as richness.
+  r.setPixelRatio(Math.min(devicePixelRatio || 1, WEAK ? 1.25 : 1.75));
   r.toneMapping = THREE.ACESFilmicToneMapping;
   r.toneMappingExposure = .95;
   return r;
