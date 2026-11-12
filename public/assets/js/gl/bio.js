@@ -7,6 +7,7 @@ import {
    CELL — fresnel membrane, nucleus with chromatin, mitochondria with cristae,
    ER, Golgi, ribosomes, vesicles
    ========================================================================= */
+
 export function makeCell() {
   const group = new THREE.Group(), R = rng(7), parts = {};
   const uTime = { value: 0 };
@@ -22,13 +23,26 @@ export function makeCell() {
       vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz);
       gl_Position = projectionMatrix*mv;
     }`;
-  const memFS = /* glsl */`${GLSL_NOISE}
-    uniform vec3 uA; uniform vec3 uB; uniform float uBase; uniform float uTime; varying vec3 vN; varying vec3 vV; varying vec3 vP;
+  // Receptor speckle: a sparkle on the membrane rim, tiered by device class.
+  // On capable hardware it stays. On LOW it is dropped, because it made the
+  // cell flicker badly on some mobile GPUs (confirmed on an Adreno 619, where
+  // whole frames came out black at roughly 30Hz while the frame rate still
+  // read a healthy 61fps). It is the brightest, highest-frequency thing in the
+  // scene and bloom amplifies it; removing either the speckle or the bloom
+  // cured it, while per-vertex evaluation, a cheaper noise, a broader falloff
+  // and forced highp all still flickered - so the trigger is the bright
+  // contribution itself, not its cost or precision. Note LOW keys off viewport
+  // and core count, which are a proxy for the GPU rather than a measure of it;
+  // a wide-screen machine with a weak or unusual GPU could still be affected.
+  // Dropping the term also lets the fragment shader skip the noise library.
+  const SPECKLE = !LOW;
+  const memFS = /* glsl */`${SPECKLE ? GLSL_NOISE : ''}
+    uniform vec3 uA; uniform vec3 uB; uniform float uBase;${SPECKLE ? ' uniform float uTime;' : ''} varying vec3 vN; varying vec3 vV;${SPECKLE ? ' varying vec3 vP;' : ''}
     void main(){
       float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
       float rim = pow(f, 2.0);
-      float sp = snoise(vP*9. + uTime*.15)*.5+.5;           // receptor speckle
-      vec3 c = mix(uA, uB, rim) + vec3(.35,.55,.75)*pow(f,5.) + vec3(.9,.95,1.)*pow(sp,6.)*.18*rim;
+      ${SPECKLE ? 'float sp = snoise(vP*9. + uTime*.15)*.5+.5;' : ''}
+      vec3 c = mix(uA, uB, rim) + vec3(.35,.55,.75)*pow(f,5.)${SPECKLE ? ' + vec3(.9,.95,1.)*pow(sp,6.)*.18*rim' : ''};
       gl_FragColor = vec4(c*.8, clamp(uBase + rim*.42, 0., 1.));
     }`;
   const mkMem = (side, base, a, b) => new THREE.ShaderMaterial({
@@ -38,7 +52,8 @@ export function makeCell() {
   const memGeo = new THREE.IcosahedronGeometry(1, LOW ? 18 : 30);
   parts.memOuter = new THREE.Mesh(memGeo, mkMem(THREE.FrontSide, .03, 0x0a3a48, 0x5fd0e0));
   parts.memInner = new THREE.Mesh(memGeo, mkMem(THREE.BackSide, .02, 0x062a34, 0x2a9fb4));
-  parts.memOuter.renderOrder = 5; group.add(parts.memInner, parts.memOuter);
+  parts.memOuter.renderOrder = 5;
+  group.add(parts.memInner, parts.memOuter);
 
   // cytoplasm haze
   const haze = glowSprite(0x2fb4c8, 3.2, .05); group.add(haze);
