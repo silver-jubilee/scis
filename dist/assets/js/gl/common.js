@@ -23,14 +23,13 @@ export function updatePointScale(renderer, camera) {
   POINT_SCALE.value = h / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
 }
 
-export function makeRenderer(canvas, { alpha = false, antialias = true } = {}) {
+export function makeRenderer(canvas, { alpha = false, antialias = !LOW } = {}) {
   const r = new THREE.WebGLRenderer({ canvas, antialias, alpha, powerPreference: 'high-performance' });
-  r.setPixelRatio(Math.min(devicePixelRatio || 1, LOW ? 1.25 : 1.75));
+  r.setPixelRatio(Math.min(devicePixelRatio || 1, LOW ? 1 : 1.75));
   r.toneMapping = THREE.ACESFilmicToneMapping;
   r.toneMappingExposure = .95;
   return r;
 }
-
 export function makeComposer(renderer, scene, camera, { strength = .8, radius = .65, threshold = .2 } = {}) {
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
