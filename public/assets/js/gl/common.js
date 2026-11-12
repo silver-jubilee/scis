@@ -1,176 +1,174 @@
-/* Stage — the page-wide background. Scenes sit along -Z; scrolling flies the camera through them. */
-import { THREE, makeRenderer, makeComposer, addRig, updatePointScale, clamp, lerp, sstep, reduce, LOW } from './common.js';
-import * as bio from './bio.js';
+/* Shared WebGL foundation: renderer + bloom, glow points, noise, helpers. */
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-export function createStage(canvas) {
-  const renderer = makeRenderer(canvas);
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x02080d);
-  scene.fog = new THREE.FogExp2(0x02080d, .016);
-  const camera = new THREE.PerspectiveCamera(42, 1, .05, 400);
-  addRig(scene);
-  const { composer, bloom } = makeComposer(renderer, scene, camera, { strength: LOW ? .55 : .8, radius: .7, threshold: .2 });
-  const D = 36;
+export { THREE };
+export const TAU = Math.PI * 2;
+export const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const CORES = navigator.hardwareConcurrency || 8;
+const WEAK = CORES <= 4 || innerWidth < 760;
 
-  // scene definitions: [builder result, scale, y offset, tilt]
-  const defs = [
-    { m: bio.makeCell(), s: 2.45, y: 0, tilt: 0 },
-    { m: bio.makeDNA({ pairs: 38 }), s: .92, y: -.1, tilt: -.3 },
-    { m: bio.makeProtein(), s: 2.5, y: 0, tilt: 0 },
-    { m: bio.makeNetwork(), s: 3.0, y: 0, tilt: 0 },
-    { m: bio.makeField(), s: 1, y: 0, tilt: 0, center: true },
-    { m: bio.makeBurst(), s: 1.35, y: 0, tilt: 0 },
-  ];
-  const pivots = defs.map((d, k) => {
-    const p = new THREE.Group(); p.add(d.m.group); p.scale.setScalar(d.s); p.rotation.z = d.tilt; p.position.z = -k * D; scene.add(p); return p;
+/* Detail tier for every scene except the cell. The cell was the only thing
+   that ever misbehaved on weak hardware; DNA, protein, network, galaxy, the
+   session visuals and the specimens were always fine, and were only ever
+   reduced because they shared a flag with it. They now render at full detail
+   everywhere.
+
+   Left as a named constant rather than deleted from the ~30 call sites, so
+   there is a single place to dial back if a weak device turns out to struggle.
+   stage.js also drops the pixel ratio by itself when frame times get bad, so
+   a device that cannot cope still has a way out - see the adaptive block
+   there, which this now leaves enabled on every device. */
+export const LOW = false;
+
+/* The cell is reduced on phones and weak machines: coarser membrane and
+   nucleus, fewer ribosomes. */
+export const CELL_LOW = WEAK;
+
+/* Separately from speed: the membrane speckle flickered on a phone that was
+   holding 61fps, so it is excluded by device rather than by performance. */
+export const FRAGILE_FX = WEAK;
+export const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+export const lerp = (a, b, t) => a + (b - a) * t;
+export const sstep = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
+export const easeInOut = (x) => (x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+export function rng(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+export const gauss = (r) => { let u = 0; for (let i = 0; i < 4; i++) u += r(); return (u - 2) * 1.2; };
+
+/* shared uniform: converts world size to pixels for point sprites */
+export const POINT_SCALE = { value: 600 };
+export function updatePointScale(renderer, camera) {
+  const h = renderer.domElement.height; // device pixels
+  POINT_SCALE.value = h / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+}
+
+export function makeRenderer(canvas, { alpha = false, antialias = true } = {}) {
+  const r = new THREE.WebGLRenderer({ canvas, antialias, alpha, powerPreference: 'high-performance' });
+  // Resolution is the dominant fragment cost: 1.75 against 1.25 is roughly
+  // double the pixels per frame, and measuring on a Moto G34 at native 1.75
+  // gave 31fps. Cap it on weak devices and phones, which recovers the frame
+  // rate while leaving geometry and particle counts at full detail - those are
+  // comparatively cheap, and they are most of what reads as richness.
+  r.setPixelRatio(Math.min(devicePixelRatio || 1, WEAK ? 1.25 : 1.75));
+  r.toneMapping = THREE.ACESFilmicToneMapping;
+  r.toneMappingExposure = .95;
+  return r;
+}
+
+export function makeComposer(renderer, scene, camera, { strength = .8, radius = .65, threshold = .2 } = {}) {
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), strength, radius, threshold);
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+  return { composer, bloom };
+}
+
+/* ---------- soft additive points ---------- */
+const POINT_VS = /* glsl */`
+attribute vec3 aColor; attribute float aSize;
+uniform float uScale; uniform float uSize;
+varying vec3 vC;
+void main(){
+  vC = aColor;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = max(1.0, uSize * aSize * uScale / -mv.z);
+}`;
+const POINT_FS = /* glsl */`
+uniform float uOpacity; varying vec3 vC;
+void main(){
+  vec2 d = gl_PointCoord - 0.5; float r = length(d) * 2.0;
+  float a = exp(-r * r * 3.2) * (1.0 - smoothstep(0.85, 1.0, r));
+  if (a < 0.004) discard;
+  gl_FragColor = vec4(vC * a * uOpacity, a * uOpacity);
+}`;
+export function pointsMaterial({ size = 0.05, opacity = 1 } = {}) {
+  return new THREE.ShaderMaterial({
+    vertexShader: POINT_VS, fragmentShader: POINT_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uScale: POINT_SCALE, uSize: { value: size }, uOpacity: { value: opacity } },
   });
+}
+/** positions: Float32Array(3n); colors: Float32Array(3n) | THREE.Color; sizes: Float32Array(n) | number */
+export function makePoints(positions, colors, sizes, mat) {
+  const n = positions.length / 3, g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  let c = colors;
+  if (!(colors instanceof Float32Array)) { c = new Float32Array(n * 3); for (let i = 0; i < n; i++) { c[i * 3] = colors.r; c[i * 3 + 1] = colors.g; c[i * 3 + 2] = colors.b; } }
+  g.setAttribute('aColor', new THREE.BufferAttribute(c, 3));
+  let s = sizes;
+  if (typeof sizes === 'number') { s = new Float32Array(n).fill(sizes); }
+  g.setAttribute('aSize', new THREE.BufferAttribute(s, 1));
+  const p = new THREE.Points(g, mat || pointsMaterial());
+  p.frustumCulled = false;
+  return p;
+}
 
-  /* ---------- warp streaks: stars stretch with scroll velocity ---------- */
-  const NST = LOW ? 260 : 620, SPAN = 80, stX = new Float32Array(NST), stY = new Float32Array(NST), stZ = new Float32Array(NST), stP = new Float32Array(NST * 6), stC = new Float32Array(NST * 6);
-  for (let i = 0; i < NST; i++) { const a = Math.random() * 6.2832, r = 1.6 + Math.pow(Math.random(), .6) * 11; stX[i] = Math.cos(a) * r; stY[i] = Math.sin(a) * r * .62; stZ[i] = Math.random() * SPAN; }
-  const stG = new THREE.BufferGeometry(); stG.setAttribute('position', new THREE.BufferAttribute(stP, 3)); stG.setAttribute('color', new THREE.BufferAttribute(stC, 3));
-  const streaks = new THREE.LineSegments(stG, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); streaks.frustumCulled = false; streaks.visible = false; scene.add(streaks);
-  let warp = 0, lastY = scrollY, svs = 0;
+/* ---------- glow sprite ---------- */
+let _glowTex;
+export function glowTexture() {
+  if (_glowTex) return _glowTex;
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.18, 'rgba(255,255,255,.55)'); gr.addColorStop(.5, 'rgba(255,255,255,.12)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  return (_glowTex = new THREE.CanvasTexture(c));
+}
+export function glowSprite(color = 0xffffff, scale = 1, opacity = 1) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending }));
+  s.scale.setScalar(scale); return s;
+}
 
-  /* ---------- scroll → scene index ---------- */
-  let anchors = [], f = 0, fT = 0, W = 0, H = 0;
-  function measure() {
-    anchors = [];
-    document.querySelectorAll('[data-scene]').forEach((el) => {
-      const list = el.dataset.scene.split(',').map(Number), r = el.getBoundingClientRect(), top = r.top + scrollY, h = r.height;
-      list.forEach((s, j) => anchors.push({ y: top + h * (j + .5) / list.length, s }));
-    });
-    anchors.sort((a, b) => a.y - b.y);
-  }
-  function target(y0) {
-    const y = y0 + H * .5;
-    if (!anchors.length) return 0;
-    if (y <= anchors[0].y) return anchors[0].s;
-    for (let i = 0; i < anchors.length - 1; i++) {
-      const a = anchors[i], b = anchors[i + 1];
-      if (y <= b.y) return a.s + (b.s - a.s) * sstep(((y - a.y) / (b.y - a.y) - .12) / .76);
-    }
-    return anchors[anchors.length - 1].s;
-  }
+/* ---------- GLSL simplex noise ---------- */
+export const GLSL_NOISE = /* glsl */`
+vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
+vec4 mod289(vec4 x){return x-floor(x*(1./289.))*289.;}
+vec4 permute(vec4 x){return mod289(((x*34.)+1.)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-.85373472095314*r;}
+float snoise(vec3 v){
+  const vec2 C=vec2(1./6.,1./3.); const vec4 D=vec4(0.,.5,1.,2.);
+  vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx);
+  vec3 g=step(x0.yzx,x0.xyz); vec3 l=1.-g; vec3 i1=min(g.xyz,l.zxy); vec3 i2=max(g.xyz,l.zxy);
+  vec3 x1=x0-i1+C.xxx; vec3 x2=x0-i2+C.yyy; vec3 x3=x0-D.yyy;
+  i=mod289(i);
+  vec4 p=permute(permute(permute(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.));
+  float n_=.142857142857; vec3 ns=n_*D.wyz-D.xzx;
+  vec4 j=p-49.*floor(p*ns.z*ns.z); vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.*x_);
+  vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.-abs(x)-abs(y);
+  vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);
+  vec4 s0=floor(b0)*2.+1.; vec4 s1=floor(b1)*2.+1.; vec4 sh=-step(h,vec4(0.));
+  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+  vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);
+  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
+  vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.); m=m*m;
+  return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}`;
 
-  function resize() {
-    W = innerWidth; H = innerHeight;
-    // on some hosts the very first layout pass can momentarily report a 0 (or stale)
-    // viewport size before the browser has finished its first paint; sizing the
-    // renderer/composer to that leaves their framebuffers permanently zero-sized
-    // (silent GL errors, canvas never recovers on its own) until another resize
-    // happens to fire. Skip the GL resize when that happens — a follow-up call
-    // below retries shortly after, once layout has definitely settled.
-    if (W > 0 && H > 0) {
-      renderer.setSize(W, H, false);
-      composer.setSize(W, H); bloom.resolution.set(W, H);
-      camera.aspect = W / H; camera.updateProjectionMatrix(); updatePointScale(renderer, camera);
-    }
-    measure();
-  }
+/* ---------- misc helpers ---------- */
+const _up = new THREE.Vector3(0, 1, 0), _d = new THREE.Vector3(), _m = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _mat = new THREE.Matrix4();
+/** Place instance i of an InstancedMesh (unit cylinder h=1,r=1 along Y) between points a and b. */
+export function setSegment(mesh, i, a, b, radius) {
+  _d.subVectors(b, a); const len = _d.length() || 1e-4; _d.divideScalar(len);
+  _m.addVectors(a, b).multiplyScalar(.5);
+  _q.setFromUnitVectors(_up, _d); _s.set(radius, len, radius);
+  _mat.compose(_m, _q, _s); mesh.setMatrixAt(i, _mat);
+}
+export function disposeTree(root) {
+  root.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { for (const k in m) { if (m[k] && m[k].isTexture) m[k].dispose(); } m.dispose(); });
+  });
+}
+export function hsl(h, s = .8, l = .6) { return new THREE.Color().setHSL(((h % 360) + 360) % 360 / 360, s, l); }
 
-  /* ---------- state ---------- */
-  let t = 0, last = performance.now(), mx = 0, my = 0, smx = 0, smy = 0, xCur = null, scrollNow = scrollY;
-  const intro = { active: false, t: 0, onFlash: null, done: null, flashed: false };
-  let frames = 0, acc = 0, degraded = false, paused = false;
-
-  function layout(xOff, yOff, k) {
-    const d = defs[k]; pivots[k].position.x = d.center ? 0 : xOff; pivots[k].position.y = d.y + (d.center ? 0 : yOff);
-  }
-
-  function frame(now) {
-    requestAnimationFrame(frame);
-    if (document.hidden || paused) { last = now; return; }
-    let dt = Math.min(.05, Math.max(0, (now - last) / 1000)); last = now;
-    if (reduce) dt *= .2;
-    t += dt;
-    const wide = W > 900, xTarget = 0, yTarget = wide ? 0 : 1.2, sc = wide ? 1.3 : .85;
-
-    let camZ, fov = 42, roll = 0;
-    if (intro.active) {
-      intro.t += dt; const T = 7.0, p = clamp(intro.t / T), s = p * p * p * (p * (6 * p - 15) + 10);
-      camZ = 15 - 79 * s; fov = 42 + 18 * sstep((intro.t - 4.8) / 2.2); roll = Math.sin(intro.t * .7) * .06 * (1 - p);
-      xCur = 0; bloom.strength = lerp(.8, 1.9, sstep((intro.t - 5.8) / 1.1));
-      for (let k = 0; k < defs.length; k++) layout(0, 0, k);
-      if (!intro.flashed && intro.t >= T - .15) { intro.flashed = true; intro.onFlash && intro.onFlash(); }
-      if (intro.t >= T) { intro.active = false; f = fT = 0; xCur = 0; bloom.strength = LOW ? .55 : .8; intro.done && intro.done(); }
-      camera.position.set(0, 0, camZ); camera.rotation.set(0, 0, roll);
-    } else {
-      scrollNow = scrollY; fT = target(scrollNow); f += (fT - f) * Math.min(1, dt * 2.6);
-      if (xCur === null) xCur = xTarget; xCur += (xTarget - xCur) * Math.min(1, dt * 2.2);
-      smx += (mx - smx) * Math.min(1, dt * 3); smy += (my - smy) * Math.min(1, dt * 3);
-      camZ = 9.5 - f * D + (wide ? 0 : 1.5);
-      const vy = (scrollNow - lastY) / Math.max(dt, .001) / H; lastY = scrollNow; svs += (vy - svs) * Math.min(1, dt * 6);
-      // bridge: a gentle light-trail carries the camera across every scene-to-scene handoff, even on a slow, careful scroll —
-      // not just a flash of streaks when scrolling fast. Peaks exactly mid-flight between two scenes, settles to 0 once arrived.
-      const fr = ((f % 1) + 1) % 1, bridge = Math.sin(fr * Math.PI); const bridgeWarp = bridge * bridge * .24;
-      const velWarp = clamp(Math.abs(svs) * .26 - .04);
-      warp += (Math.max(velWarp, bridgeWarp) - warp) * Math.min(1, dt * 5); fov = 42 + warp * 9; roll = clamp(svs * .008, -.02, .02);
-      for (let k = 0; k < defs.length; k++) { layout(xCur, yTarget, k); }
-      camera.position.set(smx * .6, -smy * .4, camZ); camera.rotation.set(0, 0, 0); camera.lookAt(smx * .3 + (xCur * .08), -smy * .2, camZ - 10); camera.rotateZ(roll);
-      bloom.strength = (LOW ? .55 : .8) + warp * .35;
-    }
-    if (Math.abs(camera.fov - fov) > .01) { camera.fov = fov; camera.updateProjectionMatrix(); updatePointScale(renderer, camera); }
-    for (let k = 0; k < defs.length; k++) {
-      const z = -k * D, vis = Math.abs(camZ - z) < (k === 5 ? 27 : 40); pivots[k].visible = vis;
-      if (vis) { defs[k].m.update(t, dt); pivots[k].scale.setScalar(defs[k].s * sc); }
-    }
-    streaks.visible = warp > .015 && !intro.active;
-    if (streaks.visible) {
-      const len = warp * 16, cz = camera.position.z;
-      for (let i = 0; i < NST; i++) {
-        const zr = (((stZ[i] - cz) % SPAN) + SPAN) % SPAN, z = cz + 4 - zr, o = i * 6, fadeIn = Math.min(1, zr / 10) * Math.min(1, (SPAN - zr) / 14), k = warp * fadeIn * (.35 + .65 * ((i * 7) % 5) / 4);
-        stP[o] = stX[i]; stP[o + 1] = stY[i]; stP[o + 2] = z; stP[o + 3] = stX[i]; stP[o + 4] = stY[i]; stP[o + 5] = z + len * (.4 + .6 * ((i * 13) % 7) / 6) * Math.sign(svs || 1);
-        stC[o] = .55 * k; stC[o + 1] = .9 * k; stC[o + 2] = 1.0 * k; stC[o + 3] = 0; stC[o + 4] = 0; stC[o + 5] = 0;
-      }
-      stG.attributes.position.needsUpdate = true; stG.attributes.color.needsUpdate = true;
-    }
-    updatePointScale(renderer, camera); composer.render();
-
-    // Adaptive quality, and now the safety net for every device. Scenes render
-    // at full detail everywhere (see LOW in common.js), so this is what catches
-    // a machine that cannot keep up: if the first 90 frames average worse than
-    // ~28fps it drops the pixel ratio once and eases the bloom. Reallocating
-    // the framebuffers costs one visible flash when it fires, which is worth
-    // paying on a device that is already dropping frames.
-    if (!LOW) {
-      acc += dt; frames++;
-      if (frames === 90) {
-        const avg = acc / frames; frames = 0; acc = 0;
-        if (avg > .036 && !degraded) { degraded = true; renderer.setPixelRatio(1); resize(); bloom.strength *= .8; }
-      }
-    }
-  }
-
-  addEventListener('resize', resize);
-  addEventListener('load', resize);
-  // extra safety net for the zero-size race described above: retry shortly after
-  // first paint even if no 'resize'/'load' event fires, so a bad initial reading
-  // can never leave the canvas permanently mis-sized.
-  setTimeout(resize, 300);
-  new ResizeObserver(measure).observe(document.body);
-  addEventListener('pointermove', (e) => { mx = e.clientX / innerWidth - .5; my = e.clientY / innerHeight - .5; }, { passive: true });
-
-  /* GPU context loss recovery — on a dual-GPU laptop switching graphics, or with several
-     heavy WebGL tabs open at once, the context can drop for a moment; without handling this
-     the canvas just goes black or flashes stale frames until reload. Pause cleanly and pick
-     the render loop back up once the browser hands the context back. */
-  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); paused = true; }, false);
-  canvas.addEventListener('webglcontextrestored', () => { degraded = false; frames = 0; acc = 0; resize(); paused = false; }, false);
-
-  resize();
-  renderer.compile(scene, camera);
-  requestAnimationFrame(frame);
-
-  return {
-    renderer,
-    playIntro({ onFlash } = {}) {
-      return new Promise((res) => { intro.active = true; intro.t = 0; intro.flashed = false; intro.onFlash = onFlash; intro.done = res; });
-    },
-    get introTime() { return intro.t; },
-    get introActive() { return intro.active; },
-    debug() { return { f, fT, anchors: anchors.map((a) => [Math.round(a.y), a.s]), scrollNow, H, warp, streaksVisible: streaks.visible }; },
-    setPaused(v) { paused = !!v; },
-    skipIntro() { if (intro.active) intro.t = 7.0; },
-  };
+/* standard lighting rig for a scene */
+export function addRig(scene, { key = 0xbff4ff, rim = 0xffb070, fill = 0x203a4a } = {}) {
+  scene.add(new THREE.HemisphereLight(0x9fdcff, 0x0a1620, .55));
+  const k = new THREE.DirectionalLight(key, 2.2); k.position.set(3, 4, 5); scene.add(k);
+  const r = new THREE.DirectionalLight(rim, 2.0); r.position.set(-4, -1.5, -3); scene.add(r);
+  const f = new THREE.PointLight(fill, 6, 12); f.position.set(0, -2, 3); scene.add(f);
 }
