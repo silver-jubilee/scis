@@ -227,22 +227,31 @@ function closeSheet() {
 }
 
 /* ---- click a speaker inside a session → their abstract, layered on top of the open sheet ---- */
-function fillAbstract(name, aff, meta, title, abstract, hue, initials) {
+/* Abstract text arrives escaped; only the speaker's own <i>, <sup>, <sub> (species names, subscripts,
+   citation numbers) are turned back into markup. */
+const rich = (t) => esc(t).replace(/&lt;(\/?)(i|sup|sub)&gt;/g, '<$1$2>');
+function fillAbstract(name, aff, meta, title, abstract, hue, initials, authors, refs) {
   sheet.style.setProperty('--h', hue);
   $('#absInitials').textContent = initials;
   $('#absName').textContent = name;
   $('#absAff').textContent = aff;
   $('#absTime').textContent = meta || '';
   $('#absTitle').textContent = title || 'Abstract to follow';
+  $('#absTitle').classList.toggle('long', (title || '').length > 80);
+  const au = $('#absAuthors'); au.innerHTML = authors ? rich(authors).replace(/\n/g, '<br>') : ''; au.hidden = !authors;
+  $('#absBody').scrollTop = 0;
   $('#absBody').innerHTML = abstract
-    ? `<p>${esc(abstract)}</p>`
+    ? abstract.split(/\n{2,}/).map(p => `<p>${rich(p)}</p>`).join('')
     : `<p class="abs-pending">Full abstract to follow — check back closer to the symposium.</p>`;
+  const rf = $('#absRefs');
+  rf.hidden = !(refs && refs.length);
+  rf.innerHTML = refs && refs.length ? `<h5>References</h5><ol>${refs.map(r => `<li>${rich(r)}</li>`).join('')}</ol>` : '';
 }
 async function openAbstract(id, idx, x, y) {
   const s = byId[id]; if (!s) return;
   const t = s.talks[idx]; if (!t) return;
   if (!sheetOpen || sheet.dataset.sid !== id) await openSheet(id, x, y);
-  fillAbstract(t.speaker, t.affiliation, `${t.time} · ${t.keynote ? 'Keynote' : 'Short talk'}`, t.title, t.abstract, s.hue, t.initials);
+  fillAbstract(t.speaker, t.affiliation, `${t.time} · ${t.keynote ? 'Keynote' : 'Short talk'}`, t.title, t.abstract, s.hue, t.initials, t.authors, t.references);
   sheet.classList.add('view-abstract');
   $('#sheetAbstract').hidden = false;
 }
@@ -276,6 +285,11 @@ async function boot() {
   const reveal = () => { if (loader && !loader.classList.contains('out')) { loader.classList.add('out'); setTimeout(() => loader.remove(), 900); } finishIntro(); };
   setTimeout(reveal, 8000); // failsafe — never leave the page hidden
   const fonts = Promise.race([document.fonts ? document.fonts.ready : Promise.resolve(), new Promise((r) => setTimeout(r, 1800))]);
+  // opt-in on-device diagnostic (?debug=gl) — see gldebug.js. Loaded before the
+  // stage so it can count draw calls from the first frame; absent otherwise.
+  if (/[?&]debug=gl\b/.test(location.search)) {
+    try { (await import('./gldebug.js')).start($('#stage')); } catch (e) { console.warn('gl debug unavailable', e); }
+  }
   try {
     // relative to THIS module (assets/js/app.js), matching the modulepreload link's URL
     // (which is relative to the document root instead) so both hit the same cache entry.
