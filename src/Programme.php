@@ -63,8 +63,8 @@ final readonly class Session
 
 final class Programme
 {
-    private const string D1_VENUE = 'SCSS seminar hall, JNU';   // exact hall not final
-    private const string D2_VENUE = 'SCSS seminar hall, JNU';   // exact hall not final
+    private const string D1_VENUE = 'SC&SS seminar hall, JNU';   // exact hall not final
+    private const string D2_VENUE = 'SC&SS seminar hall, JNU';   // exact hall not final
     private const string MEALS_VENUE = 'SC&IS';   // lunch on both days, poster session and gala dinner
 
     private static function talk(string $time, string $who, string $aff, bool $short = false): Talk
