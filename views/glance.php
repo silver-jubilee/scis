@@ -18,7 +18,12 @@
           <div>
             <h3><?= e($event['theme']) ?></h3>
             <p>A two-day scientific celebration of 25 years of the School of Computational and Integrative Sciences — invited lectures, student talks, poster sessions, alumni interaction and informal discussion, designed to foster exchange, mentorship and new collaborations.</p>
-            <p class="small">Sponsored by the DBT-Bioinformatics Center, SC&amp;IS, JNU.</p>
+            <p class="small">Sponsored by the DBT-Bioinformatics Center, SC&amp;IS, JNU and the Royal Society of Chemistry.</p>
+            <div class="sponsor-logos">
+              <a href="https://dbtindia.gov.in" target="_blank" rel="noopener" aria-label="Department of Biotechnology, Government of India (DBT-Bioinformatics Center)"><img src="assets/img/dbt-logo.png" width="292" height="200" alt="Department of Biotechnology, Government of India" loading="lazy" decoding="async"></a>
+              <a href="https://www.jnu.ac.in" target="_blank" rel="noopener" aria-label="School of Computational and Integrative Sciences, JNU"><img src="assets/img/jnu-logo.png" width="447" height="447" alt="SC&amp;IS, Jawaharlal Nehru University" loading="lazy" decoding="async"></a>
+              <a href="https://www.rsc.org" target="_blank" rel="noopener" aria-label="Royal Society of Chemistry"><img src="assets/img/rsc-logo.svg" width="250" height="70" alt="Royal Society of Chemistry" loading="lazy" decoding="async"></a>
+            </div>
           </div>
         </div>
 
@@ -28,7 +33,7 @@
             <h3>Fri 27 &amp; Sat 28 November 2026</h3>
             <p>Day 1 opens at 09:00 with registration and inaugural remarks and closes with posters and a gala dinner. Day 2 runs 09:30 – 16:30 and ends with the valedictory session and poster awards.</p>
             <ul class="facts">
-              <li><b>15 Nov</b><span>Abstract submission deadline</span></li>
+              <li><b>18 Nov</b><span>Abstract submission deadline</span></li>
               <li><b>20 Nov</b><span>Registration deadline</span></li>
             </ul>
           </div>
@@ -41,8 +46,8 @@
           <div>
             <h3><?= e($event['university']) ?></h3>
             <ul class="facts wide">
-              <li><b>Day 1 &amp; 2 — sessions</b><span><a class="inline-map-link" href="<?= e($event['saa_map_url']) ?>" target="_blank" rel="noopener">Auditorium, JNU</a><br>Registration, talks, tea &amp; lunch</span></li>
-              <li><b>Day 1 evening</b><span>SC&amp;IS<br>Poster session &amp; gala dinner</span></li>
+              <li><b>Day 1 &amp; 2 — sessions</b><span><a class="inline-map-link" href="<?= e($event['saa_map_url']) ?>" target="_blank" rel="noopener">Auditorium, JNU</a><br>Registration, talks &amp; tea</span></li>
+              <li><b>Lunch &amp; dinner</b><span>SC&amp;IS<br>Lunch on both days · Day 1 evening: poster session &amp; gala dinner</span></li>
             </ul>
             <a class="loc-pin" href="<?= e($event['map_url']) ?>" target="_blank" rel="noopener">
               <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z" fill="currentColor"/></svg>
