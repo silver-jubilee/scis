@@ -1,7 +1,7 @@
 <section class="section programme" id="programme" data-scene="3">
   <div class="wrap">
     <p class="eyebrow" data-reveal>Programme</p>
-    <h2 class="big" data-split>Two days. Seven sessions.</h2>
+    <h2 class="big" data-split>2 days. 7 sessions.</h2>
     <p class="body" data-reveal>Choose a session — a model of the science unfolds, and the talks emerge from it.</p>
 
     <div class="daytabs" role="tablist" aria-label="Day" data-reveal>
