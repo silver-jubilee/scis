@@ -1,7 +1,7 @@
 <section class="section glance" id="glance" data-scene="2">
   <div class="wrap">
     <p class="eyebrow" data-reveal>At a glance</p>
-    <h2 class="big" data-split>What, when, where, who.</h2>
+    <h2 class="big" data-split>what, when, where, who.</h2>
 
     <div class="tabs" data-tabs>
       <div class="tablist" role="tablist" aria-label="Event details" data-reveal>
