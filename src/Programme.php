@@ -63,8 +63,8 @@ final readonly class Session
 
 final class Programme
 {
-    private const string D1_VENUE = 'SC&SS seminar hall, JNU';   // exact hall not final
-    private const string D2_VENUE = 'SC&SS seminar hall, JNU';   // exact hall not final
+    private const string D1_VENUE = 'SC&SS Seminar Hall, JNU';
+    private const string D2_VENUE = 'SC&SS Seminar Hall, JNU';
     private const string MEALS_VENUE = 'SC&IS';   // lunch on both days, poster session and gala dinner
 
     private static function talk(string $time, string $who, string $aff, bool $short = false): Talk
@@ -101,9 +101,9 @@ final class Programme
                 self::talk('14:20 – 14:50', 'Dr. Rashmi Bhardwaj', 'GGSIPU'),
                 self::talk('14:50 – 15:20', 'Dr. Manish Dev Shrimali', 'Central University of Rajasthan'),
                 self::talk('15:20 – 15:35', 'Dr. Kuldeep Singh Yadav', 'MANIT Bhopal', true),
-                self::talk('15:35 – 15:50', 'Dr. Saurabh Sharma', 'SCSS, JNU', true),
+                self::talk('15:35 – 15:50', 'Dr. Saurabh Sharma', 'SC&SS, JNU', true),
             ]),
-            new Session('s4', 4, 'Artificial Intelligence in Computational Biology', '16:20 – 18:05', 'Dr. Shandar Ahmad, Dr. Rakesh Kumar Saroj & Dr. Jyoti Singh Kirar', self::D1_VENUE, 198,
+            new Session('s4', 4, 'Artificial Intelligence in Computational Biology', '16:20 – 18:05', 'Dr. Shandar Ahmad, Dr. Rakesh Pandey & Dr. Jyoti Singh Kirar', self::D1_VENUE, 198,
                 'Learning from biological data — models that predict, design and explain.', [
                 self::talk('16:20 – 16:50', 'Dr. Vivek Tiwari', 'IISER Berhampur'),
                 self::talk('16:50 – 17:20', 'Dr. Tavpritesh Sethi', 'IIIT Delhi'),
@@ -127,8 +127,8 @@ final class Programme
             new Session('s7', 7, 'Molecular Biophysics and Biophysical Chemistry', '14:15 – 16:00', 'Dr. Arnab Bhattacharjee', self::D2_VENUE, 48,
                 'Forces, folding and dynamics of the molecules that do the work.', [
                 self::talk('14:15 – 14:45', 'Dr. Suman Dhar', 'TERI, New Delhi'),
-                self::talk('14:45 – 15:15', 'Dr. Ruchi Anand', 'IIT Bombay'),
-                self::talk('15:15 – 15:45', 'Dr. Shruthi Viswanath', 'NCBS'),
+                self::talk('14:45 – 15:15', 'Dr. Shruthi Viswanath', 'NCBS'),
+                self::talk('15:15 – 15:45', 'Dr. Ruchi Anand', 'IIT Bombay'),
                 self::talk('15:45 – 16:00', 'Dr. Anupam Mondal', 'IIT Kharagpur', true),
             ]),
         ];
