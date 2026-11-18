@@ -21,7 +21,7 @@ $event = [
     'registration_deadline' => '2026-11-20T23:59:00+05:30',
     'register_url' => 'https://tinyurl.com/scis25jnu',
     'map_url'   => 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode('School of Computational and Integrative Sciences, Jawaharlal Nehru University, New Delhi 110067'),
-    'saa_map_url' => 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode('School of Computer and Systems Sciences,Jawaharlal Nehru University, New Delhi 110067'),
+    'saa_map_url' => 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode('School of Computer and Systems Sciences, Jawaharlal Nehru University, New Delhi 110067'),
     'fee_student' => '₹1,000',
     'fee_other'   => '₹2,000',
 ];
@@ -88,6 +88,7 @@ require $root . '/views/hero.php';
 require $root . '/views/about.php';
 require $root . '/views/glance.php';
 require $root . '/views/programme.php';
+require $root . '/views/sponsors.php';
 require $root . '/views/contact.php';
 require $root . '/views/register.php';
 ?>
