@@ -126,9 +126,9 @@ final class Programme
             ]),
             new Session('s7', 7, 'Molecular Biophysics and Biophysical Chemistry', '14:15 – 16:00', 'Dr. Arnab Bhattacharjee', self::D2_VENUE, 48,
                 'Forces, folding and dynamics of the molecules that do the work.', [
-                self::talk('14:15 – 14:45', 'Dr. Suman Dhar', 'TERI, New Delhi'),
+                self::talk('14:15 – 14:45', 'Dr. Ruchi Anand', 'IIT Bombay'),
                 self::talk('14:45 – 15:15', 'Dr. Shruthi Viswanath', 'NCBS'),
-                self::talk('15:15 – 15:45', 'Dr. Ruchi Anand', 'IIT Bombay'),
+                self::talk('15:15 – 15:45', 'Dr. Suman Dhar', 'TERI, New Delhi'),
                 self::talk('15:45 – 16:00', 'Dr. Anupam Mondal', 'IIT Kharagpur', true),
             ]),
         ];
@@ -164,7 +164,7 @@ final class Programme
                     $se('s4'),
                     $ev('18:05 – 18:15', 'Industry session: presentation by GROWDEA Technologies', 'industry', self::D1_VENUE),
                     $ev('18:15 – 19:30', 'Poster & networking session', 'poster', self::MEALS_VENUE, 'Best Poster Prizes supported by ACS'),
-                    $ev('19:30 onwards', 'Dinner', 'dinner', self::MEALS_VENUE, 'Informal reflections on the SC&IS journey'),
+                    $ev('19:30 onwards', 'Gala dinner', 'dinner', self::MEALS_VENUE, 'Informal reflections on the SC&IS journey'),
                 ],
             ],
             [
