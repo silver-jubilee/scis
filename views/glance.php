@@ -41,7 +41,7 @@
           <div class="panel-ico" data-specimen="when" aria-hidden="true"></div>
           <div>
             <h3>Fri 27 &amp; Sat 28 November 2026</h3>
-            <p>Day 1 opens at 09:00 with registration and inaugural remarks and closes with posters and a gala dinner. Day 2 runs 09:30 – 16:30 and ends with the valedictory session and poster awards.</p>
+            <p>Day 1 opens at 09:00 with registration and inaugural remarks and closes with posters and a dinner. Day 2 runs 09:30 – 16:30 and ends with the valedictory session and poster awards.</p>
             <ul class="facts">
               <li><b>18 Nov</b><span>Abstract submission deadline</span></li>
               <li><b>20 Nov</b><span>Registration deadline</span></li>
